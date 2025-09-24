@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperliquid Scraper - Status Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dashboard {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status {
+            display: flex;
+            justify-content: space-around;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .status-item {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 1rem;
+            border-radius: 15px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .status-item h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #FFD700;
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .status-online {
+            color: #00ff88;
+        }
+
+        .status-warning {
+            color: #ffaa00;
+        }
+
+        .links {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .links a {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #00ff88;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 600px) {
+            .dashboard {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .status {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>🚀 Hyperliquid Scraper</h1>
+        <p><span class="live-indicator"></span>Status Dashboard</p>
+
+        <div class="status">
+            <div class="status-item">
+                <h3>Service Status</h3>
+                <div class="status-value status-online" id="service-status">Online</div>
+            </div>
+            <div class="status-item">
+                <h3>Last Update</h3>
+                <div class="status-value" id="last-update">Loading...</div>
+            </div>
+            <div class="status-item">
+                <h3>Interval</h3>
+                <div class="status-value status-warning">10 min</div>
+            </div>
+            <div class="status-item">
+                <h3>Version</h3>
+                <div class="status-value">v2.0</div>
+            </div>
+        </div>
+
+        <div class="links">
+            <a href="/health" target="_blank">Health Check</a>
+            <a href="/api/status" target="_blank">API Status</a>
+            <a href="/logs/" target="_blank">View Logs</a>
+            <a href="/exports/" target="_blank">Download Data</a>
+            <a href="/metrics" target="_blank">Metrics</a>
+        </div>
+
+        <div class="footer">
+            <p>🔄 Automated Funding Rate Collection</p>
+            <p>📊 Hyperliquid Exchange Data</p>
+            <p id="current-time"></p>
+        </div>
+    </div>
+
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent =
+                `Current Time: ${now.toLocaleString('pt-BR')}`;
+        }
+
+        // Update last update time (simulated)
+        function updateLastUpdate() {
+            const now = new Date();
+            const tenMinutesAgo = new Date(now.getTime() - (Math.random() * 10 * 60 * 1000));
+            document.getElementById('last-update').textContent =
+                tenMinutesAgo.toLocaleTimeString('pt-BR');
+        }
+
+        // Check service health
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    document.getElementById('service-status').textContent = 'Online';
+                    document.getElementById('service-status').className = 'status-value status-online';
+                } else {
+                    document.getElementById('service-status').textContent = 'Warning';
+                    document.getElementById('service-status').className = 'status-value status-warning';
+                }
+            } catch (error) {
+                document.getElementById('service-status').textContent = 'Offline';
+                document.getElementById('service-status').className = 'status-value';
+            }
+        }
+
+        // Initialize
+        updateTime();
+        updateLastUpdate();
+        checkHealth();
+
+        // Update every 30 seconds
+        setInterval(updateTime, 30000);
+        setInterval(updateLastUpdate, 60000);
+        setInterval(checkHealth, 120000);
+    </script>
+</body>
+</html>

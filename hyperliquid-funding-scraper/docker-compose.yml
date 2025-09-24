@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # Main scraper service
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: hyperliquid-scraper
+    image: hyperliquid-scraper:latest
+    env_file:
+      - .env
+    volumes:
+      - logs:/app/logs
+      - exports:/app/exports
+      - screenshots:/app/screenshots
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HEADLESS_MODE=true
+      - ENVIRONMENT=production
+      - TZ=America/Sao_Paulo
+      - RUN_INTERVAL_MINUTES=10
+      - ENABLE_SCHEDULER=true
+    restart: unless-stopped
+    networks:
+      - scraper-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from src.database.supabase_client import SupabaseClient; client = SupabaseClient(); exit(0 if client.test_connection() else 1)"]
+      interval: 2m
+      timeout: 30s
+      retries: 3
+      start_period: 1m
+
+  # Health monitoring service
+  health-monitor:
+    image: nginx:alpine
+    container_name: hyperliquid-health
+    ports:
+      - "${HEALTH_PORT:-8080}:80"
+    volumes:
+      - ./monitoring/nginx.conf:/etc/nginx/nginx.conf:ro
+      - logs:/usr/share/nginx/html/logs:ro
+      - exports:/usr/share/nginx/html/exports:ro
+    depends_on:
+      - scraper
+    networks:
+      - scraper-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Log aggregator (optional)
+  logrotate:
+    image: alpine:latest
+    container_name: hyperliquid-logrotate
+    volumes:
+      - logs:/logs
+    command: >
+      sh -c "
+        apk add --no-cache logrotate &&
+        echo '/logs/*.log {
+          daily
+          rotate 7
+          compress
+          missingok
+          notifempty
+          create 644 1000 1000
+        }' > /etc/logrotate.d/scraper &&
+        crond -f -l 2
+      "
+    restart: unless-stopped
+    profiles:
+      - maintenance
+
+networks:
+  scraper-network:
+    driver: bridge
+    name: hyperliquid-network
+
+volumes:
+  logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs
+  exports:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/exports
+  screenshots:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/screenshots

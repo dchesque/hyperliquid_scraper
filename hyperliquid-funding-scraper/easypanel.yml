@@ -1,0 +1,79 @@
+# EasyPanel deployment configuration
+# Upload this file to your EasyPanel dashboard
+
+version: "3.8"
+
+services:
+  hyperliquid-scraper:
+    image: hyperliquid/funding-scraper:latest
+    container_name: hyperliquid-scraper
+    restart: unless-stopped
+
+    # Environment variables for EasyPanel
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HEADLESS_MODE=true
+      - ENVIRONMENT=production
+      - TZ=America/Sao_Paulo
+      - RUN_INTERVAL_MINUTES=10
+      - ENABLE_SCHEDULER=true
+      - LOG_LEVEL=INFO
+
+      # Supabase credentials (set these in EasyPanel environment)
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+
+      # Chrome configuration
+      - CHROME_DRIVER_PATH=/usr/local/bin/chromedriver
+      - USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+
+    # Resource limits for VPS
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.3'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'from src.database.supabase_client import SupabaseClient; import sys; client = SupabaseClient(); sys.exit(0 if client.test_connection() else 1)' || exit 1"]
+      interval: 120s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+
+    # Volume mounts for persistence
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+      - ./screenshots:/app/screenshots
+
+  # Optional health monitoring endpoint
+  health-monitor:
+    image: nginx:alpine
+    container_name: hyperliquid-health
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+    # Custom nginx config for health endpoints
+    volumes:
+      - ./monitoring/health.html:/usr/share/nginx/html/index.html:ro
+      - ./logs:/usr/share/nginx/html/logs:ro
+
+    # Expose health check port
+    ports:
+      - "8080:80"
+
+    depends_on:
+      - hyperliquid-scraper
