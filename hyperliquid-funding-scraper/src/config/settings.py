@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field, validator
+from pydantic import Field, validator, ConfigDict
 from dotenv import load_dotenv
 
 
@@ -14,6 +14,13 @@ load_dotenv(BASE_DIR / ".env")
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"  # Ignore extra environment variables
+    )
 
     # Supabase Configuration
     supabase_url: str = Field(..., env="SUPABASE_URL")
@@ -83,11 +90,6 @@ class Settings(BaseSettings):
             raise ValueError("Arbitrage threshold must be positive")
         return v
 
-    class Config:
-        """Pydantic configuration."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
     @property
     def log_file_path(self) -> Path:
