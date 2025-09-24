@@ -5,9 +5,12 @@ import time
 import signal
 import click
 import schedule
+import threading
+import json
 from typing import Optional, List
 from datetime import datetime, timedelta
 from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from src.config import settings
 from src.utils.logger import setup_logging, get_logger, log_scraping_metrics
@@ -18,6 +21,109 @@ from src.utils import DataProcessor
 
 # Global flag for graceful shutdown
 shutdown_flag = False
+
+# Global status for health checks
+app_status = {
+    "status": "starting",
+    "last_scraping": None,
+    "last_success": None,
+    "database_connected": False,
+    "total_scraped": 0,
+    "uptime_start": datetime.now().isoformat()
+}
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Simple HTTP handler for health checks and status endpoints."""
+
+    def do_GET(self):
+        global app_status
+
+        try:
+            if self.path == "/health":
+                # Basic health check
+                status_code = 200 if app_status["database_connected"] else 503
+                response = {
+                    "status": "healthy" if status_code == 200 else "unhealthy",
+                    "timestamp": datetime.now().isoformat(),
+                    "database": "connected" if app_status["database_connected"] else "disconnected"
+                }
+
+            elif self.path == "/api/status" or self.path == "/status":
+                # Detailed status information
+                response = dict(app_status)
+                response["timestamp"] = datetime.now().isoformat()
+
+                # Calculate uptime
+                start_time = datetime.fromisoformat(app_status["uptime_start"])
+                uptime = datetime.now() - start_time
+                response["uptime_seconds"] = int(uptime.total_seconds())
+                response["uptime_hours"] = round(uptime.total_seconds() / 3600, 2)
+
+                status_code = 200
+
+            elif self.path == "/" or self.path == "/api":
+                # Root endpoint info
+                response = {
+                    "service": "Hyperliquid Funding Scraper",
+                    "version": "1.0.0",
+                    "status": app_status["status"],
+                    "endpoints": ["/health", "/api/status", "/api"]
+                }
+                status_code = 200
+
+            else:
+                # 404 for unknown endpoints
+                response = {"error": "Not found", "path": self.path}
+                status_code = 404
+
+        except Exception as e:
+            response = {"error": str(e), "status": "error"}
+            status_code = 500
+
+        # Send response
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        response_json = json.dumps(response, indent=2)
+        self.wfile.write(response_json.encode())
+
+    def log_message(self, format, *args):
+        """Suppress default logging to avoid spam."""
+        return
+
+
+def start_http_server(port: int = 8080):
+    """Start HTTP server for health checks."""
+    try:
+        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        logger = get_logger(__name__)
+        logger.info(f"HTTP server started on port {port}")
+        logger.info(f"Health check: http://localhost:{port}/health")
+        logger.info(f"Status API: http://localhost:{port}/api/status")
+        server.serve_forever()
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Failed to start HTTP server: {e}")
+
+
+def update_app_status(status: str = None, database_connected: bool = None,
+                     last_scraping: bool = None, scraped_count: int = None):
+    """Update global application status."""
+    global app_status
+
+    if status:
+        app_status["status"] = status
+    if database_connected is not None:
+        app_status["database_connected"] = database_connected
+    if last_scraping:
+        app_status["last_scraping"] = datetime.now().isoformat()
+        if last_scraping:
+            app_status["last_success"] = datetime.now().isoformat()
+    if scraped_count:
+        app_status["total_scraped"] += scraped_count
 
 
 def signal_handler(signum, frame):
@@ -61,7 +167,10 @@ def run_scraping_job(
 
         # Test database connection
         if not db_client.test_connection():
+            update_app_status(database_connected=False)
             raise Exception("Failed to connect to Supabase")
+
+        update_app_status(database_connected=True)
 
         # Initialize scraper
         scraper = FundingRateScraper(headless=settings.headless_mode)
@@ -73,9 +182,11 @@ def run_scraping_job(
         if not rates:
             logger.warning("No rates scraped")
             status = "partial"
+            update_app_status(last_scraping=False)
         else:
             coins_scraped = len(rates)
             logger.info(f"Scraped {coins_scraped} funding rates")
+            update_app_status(last_scraping=True, scraped_count=coins_scraped)
 
             # Validate data quality
             is_valid, errors = processor.validate_data_quality(rates)
@@ -180,6 +291,9 @@ def run_scheduler() -> None:
     """Run the scheduler daemon."""
     logger = get_logger(__name__)
     logger.info(f"Starting scheduler (interval: {settings.run_interval_minutes} minutes)")
+
+    # Update status
+    update_app_status(status="running")
 
     # Schedule the job
     schedule.every(settings.run_interval_minutes).minutes.do(run_all_timeframes)
@@ -353,6 +467,12 @@ def main(
         # Main execution modes
         if daemon:
             logger.info("Starting in daemon mode...")
+
+            # Start HTTP server in background thread
+            http_thread = threading.Thread(target=start_http_server, args=(8080,), daemon=True)
+            http_thread.start()
+
+            # Run scheduler in main thread
             run_scheduler()
 
         elif run_once or timeframe != "hourly":

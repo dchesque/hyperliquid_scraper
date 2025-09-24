@@ -5,7 +5,8 @@
       "Bash(python:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Read(//d/Users/OneDrive/Imagens/Screenshots/**)"
     ],
     "deny": [],
     "ask": []
