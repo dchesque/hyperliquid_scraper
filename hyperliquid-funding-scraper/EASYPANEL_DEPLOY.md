@@ -30,8 +30,8 @@ No EasyPanel, configure as variáveis de ambiente:
 
 ```env
 # OBRIGATÓRIO - Suas credenciais Supabase
-SUPABASE_URL=https://ioabuukbxdzceixorqzp.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvYWJ1dWtieGR6Y2VpeG9ycXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2ODAzODksImV4cCI6MjA3NDI1NjM4OX0.N38uSuPcuj60gpsWv-ATMhQLDTa2xWBTxvmJo4vKxdQ
+SUPABASE_URL=
+SUPABASE_KEY=
 
 # Configuração de produção
 HEADLESS_MODE=true
